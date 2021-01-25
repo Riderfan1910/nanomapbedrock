@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"fmt"
 	"github.com/urfave/cli/v2"
 	"nanomap/nanomap"
 )
@@ -36,7 +36,7 @@ func main() {
 		}
 		fmt.Println(world, chunks)
 
-    return nil
+		return nil
 	}
 
 	app.Run(os.Args)

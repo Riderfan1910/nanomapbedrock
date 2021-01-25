@@ -3,13 +3,8 @@ package nanomap
 import (
 	"path/filepath"
 	"encoding/binary"
-	"encoding/hex"
 	"github.com/midnightfreddie/goleveldb/leveldb"
 )
-
-type Chunks struct {
-	data	map[XZPos]*Chunk
-}
 
 type World struct {
 	Path		string
@@ -41,25 +36,22 @@ func (world *World) Close() error {
 
 func (_world *World) SetupChunk() (*World, *Chunks, error) {
 	iter := _world.DB.NewIterator(nil, nil)
-	chunksTotal := 0
-	var x, y, z, xmin, xmax, zmin, zmax int32
-	_chunks := map[string][][]byte{}
+	_chunks := map[XZPos][][]byte{}
 	chunks := &Chunks{
 		data: map[XZPos]*Chunk{},
 	}
+	
+	chunksTotal := 0
+	var x, y, z, xmin, xmax, zmin, zmax int32
 	
 	for iter.Next() {
 		key := iter.Key()
 		tmp := make([]byte, len(key))
 		if len(key) > 8 && key[8] == 47 {
-			subChunkPrefix := hex.EncodeToString(key[0:8])
-			_chunks[subChunkPrefix] = append(_chunks[subChunkPrefix], tmp)
-
 			// Update the min & max coordinates of the world.
 			x, z, xmin, xmax, zmin, zmax = GetCoords(key, xmin, xmax, zmin, zmax)
 
-			chunk := SetChunk(_chunks[subChunkPrefix], x, y, z)
-			chunks.data[SetXZPos(x, z)] = chunk
+			_chunks[SetXZPos(x, z)] = append(_chunks[SetXZPos(x, z)], tmp)
 
 			chunksTotal++
 		}
@@ -72,7 +64,11 @@ func (_world *World) SetupChunk() (*World, *Chunks, error) {
 		DB: _world.DB,
 		chunksTotal: chunksTotal,
 	}
-
+	
+	for i, _chunk := range _chunks {
+		chunk := SetPreChunk(_chunk, i.x, y, i.z)
+		chunks.data[SetXZPos(i.x, i.z)] = chunk
+	}
 
 	err := iter.Error()
 	if err != nil {

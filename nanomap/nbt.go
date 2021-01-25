@@ -15,3 +15,7 @@ const (
   TAG_Int_Array = 11
   TAG_Long_Array = 12
 )
+
+func Parse(data []byte) {
+  
+}
