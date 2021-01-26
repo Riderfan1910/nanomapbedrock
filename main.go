@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"fmt"
 	"github.com/urfave/cli/v2"
 	"nanomap/nanomap"
 )
@@ -24,17 +23,9 @@ func main() {
 	}
 	
 	app.Action = func (context *cli.Context) error {
-		_world, err := nanomap.OpenWorld(context.String("world"))
-		if err != nil {
+		if err := nanomap.Main(context.String("world")); err != nil {
 			return cli.NewExitError(err, 1)
 		}
-		defer _world.Close()
-
-		world, chunks, err := _world.SetupChunk()
-		if err != nil {
-			return cli.NewExitError(err, 1)
-		}
-		fmt.Println(world, chunks)
 
 		return nil
 	}

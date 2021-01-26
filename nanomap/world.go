@@ -1,98 +1,103 @@
 package nanomap
 
 import (
+	"fmt"
 	"path/filepath"
 	"encoding/binary"
-	"github.com/midnightfreddie/goleveldb/leveldb"
+	"github.com/beito123/goleveldb/leveldb"
 )
 
 type World struct {
 	Path		string
 	DB 			*leveldb.DB
-	chunksTotal	int
 }
 
 func OpenWorld(path string) (*World, error) {
-	result := &World{
+	world := &World{
 		Path: path,
 		DB: nil,
-		chunksTotal: 0,
 	}
 	var err error
 
-	result.DB, err = leveldb.OpenFile(filepath.Join(path, "db"), nil)
+	world.DB, err = leveldb.OpenFile(filepath.Join(path, "db"), nil)
 	if err != nil {
-		_ = result.DB.Close()
-		return result, err
+		_ = world.DB.Close()
+		return world, err
 	}
 
-	return result, nil
+	return world, nil
 }
 
-func (world *World) Close() error {
-	err := world.DB.Close()
-	return err
-}
+func ReadWorld(path string) (*World, map[XZPos][][]byte, error) {
+	world, err := OpenWorld(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	
+	iter := world.DB.NewIterator(nil, nil)
 
-func (_world *World) SetupChunk() (*World, *Chunks, error) {
-	iter := _world.DB.NewIterator(nil, nil)
 	_chunks := map[XZPos][][]byte{}
 	chunks := &Chunks{
 		data: map[XZPos]*Chunk{},
 	}
-	
+
 	chunksTotal := 0
 	var x, y, z, xmin, xmax, zmin, zmax int32
 	
 	for iter.Next() {
 		key := iter.Key()
 		tmp := make([]byte, len(key))
+
 		if len(key) > 8 && key[8] == 47 {
 			// Update the min & max coordinates of the world.
-			x, z, xmin, xmax, zmin, zmax = GetCoords(key, xmin, xmax, zmin, zmax)
+			x, z, xmin, xmax, zmin, zmax = GetEdges(key, xmin, xmax, zmin, zmax)
+			
+			chunkData := iter.Value()
 
-			_chunks[SetXZPos(x, z)] = append(_chunks[SetXZPos(x, z)], tmp)
+			_chunks[SetXZPos(x, z)] = append(_chunks[SetXZPos(x, z)], chunkData)
+			chunk := SetChunk(_chunks[SetXZPos(x, z)], x, y, z)
+			chunks.data[SetXZPos(x, z)] = chunk
+			
+			// ReadChunk(chunkData, 0)
+			fmt.Println(key)
 
 			chunksTotal++
 		}
+	
 		copy(tmp, key)
 	}
 	iter.Release()
 
-	world := &World{
-		Path: _world.Path,
-		DB: _world.DB,
-		chunksTotal: chunksTotal,
-	}
-	
-	for i, _chunk := range _chunks {
-		chunk := SetPreChunk(_chunk, i.x, y, i.z)
-		chunks.data[SetXZPos(i.x, i.z)] = chunk
+	world = &World{
+		Path: world.Path,
+		DB: world.DB,
 	}
 
-	err := iter.Error()
+	err = iter.Error()
 	if err != nil {
-		return world, chunks, err
+		return world, _chunks, err
 	}
 
-	return world, chunks, nil
+	defer world.DB.Close()
+
+	return world, _chunks, nil
 }
 
 // Get min & max coordinates from leveldb key.
-func GetCoords(key []byte, xmin, xmax, zmin, zmax int32) (int32, int32, int32, int32, int32, int32) {
-	_x := int32(binary.LittleEndian.Uint32(key[0:4]))
-	_z := int32(binary.LittleEndian.Uint32(key[4:8]))
+func GetEdges(key []byte, _xmin, _xmax, _zmin, _zmax int32) (x, z, xmin, xmax, zmin, zmax int32) {
+	x = int32(binary.LittleEndian.Uint32(key[0:4]))
+	z = int32(binary.LittleEndian.Uint32(key[4:8]))
 
 	switch {
-		case _x <= xmin:
-			xmin = _x
-		case _x >= xmax:
-			xmax = _x
-		case _z <= zmin:
-			zmin = _z
-		case _z >= zmax:
-			zmax = _z
+		case x <= _xmin:
+			xmin = x
+		case x >= _xmax:
+			xmax = x
+		case z <= _zmin:
+			zmin = z
+		case z >= _zmax:
+			zmax = z
 	}
 
-	return _x, _z, xmin, xmax, zmin, zmax
+	return
 }
