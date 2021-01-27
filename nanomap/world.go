@@ -1,7 +1,6 @@
 package nanomap
 
 import (
-	"fmt"
 	"path/filepath"
 	"encoding/binary"
 	"github.com/beito123/goleveldb/leveldb"
@@ -28,38 +27,29 @@ func OpenWorld(path string) (*World, error) {
 	return world, nil
 }
 
-func ReadWorld(path string) (*World, map[XZPos][][]byte, error) {
-	world, err := OpenWorld(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	
+func (world *World) GenerateSuperShunks() (*SuperChunks, error) {
 	iter := world.DB.NewIterator(nil, nil)
 
-	_chunks := map[XZPos][][]byte{}
-	chunks := &Chunks{
-		data: map[XZPos]*Chunk{},
+	superChunks := &SuperChunks{
+		data: map[XZPos][]*SuperChunk{},
 	}
 
 	chunksTotal := 0
-	var x, y, z, xmin, xmax, zmin, zmax int32
+	var x, z, xmin, xmax, zmin, zmax int32
 	
 	for iter.Next() {
 		key := iter.Key()
 		tmp := make([]byte, len(key))
 
 		if len(key) > 8 && key[8] == 47 {
-			// Update the min & max coordinates of the world.
+			// Update the min & max coordinate of the world.
 			x, z, xmin, xmax, zmin, zmax = GetEdges(key, xmin, xmax, zmin, zmax)
 			
 			chunkData := iter.Value()
 
-			_chunks[SetXZPos(x, z)] = append(_chunks[SetXZPos(x, z)], chunkData)
-			chunk := SetChunk(_chunks[SetXZPos(x, z)], x, y, z)
-			chunks.data[SetXZPos(x, z)] = chunk
-			
-			// ReadChunk(chunkData, 0)
-			fmt.Println(key)
+			_superChunks := superChunks.data[SetXZPos(x, z)]
+			superChunk := SetSuperChunk(chunkData, x, z)
+			superChunks.data[SetXZPos(x, z)] = append(_superChunks, superChunk)
 
 			chunksTotal++
 		}
@@ -73,17 +63,17 @@ func ReadWorld(path string) (*World, map[XZPos][][]byte, error) {
 		DB: world.DB,
 	}
 
-	err = iter.Error()
+	err := iter.Error()
 	if err != nil {
-		return world, _chunks, err
+		return superChunks, err
 	}
 
 	defer world.DB.Close()
 
-	return world, _chunks, nil
+	return superChunks, nil
 }
 
-// Get min & max coordinates from leveldb key.
+// Get min & max coordinate from leveldb key.
 func GetEdges(key []byte, _xmin, _xmax, _zmin, _zmax int32) (x, z, xmin, xmax, zmin, zmax int32) {
 	x = int32(binary.LittleEndian.Uint32(key[0:4]))
 	z = int32(binary.LittleEndian.Uint32(key[4:8]))
