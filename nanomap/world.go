@@ -27,7 +27,7 @@ func OpenWorld(path string) (*World, error) {
 	return world, nil
 }
 
-func (world *World) GenerateSuperShunks() (*SuperChunks, error) {
+func (world *World) GenerateSuperChunks() (*SuperChunks, error) {
 	iter := world.DB.NewIterator(nil, nil)
 
 	superChunks := &SuperChunks{
@@ -44,12 +44,13 @@ func (world *World) GenerateSuperShunks() (*SuperChunks, error) {
 		if len(key) > 8 && key[8] == 47 {
 			// Update the min & max coordinate of the world.
 			x, z, xmin, xmax, zmin, zmax = GetEdges(key, xmin, xmax, zmin, zmax)
-			
+
 			chunkData := iter.Value()
 
 			_superChunks := superChunks.data[SetXZPos(x, z)]
 			superChunk := SetSuperChunk(chunkData, x, z)
 			superChunks.data[SetXZPos(x, z)] = append(_superChunks, superChunk)
+			superChunks.xmin, superChunks.xmax, superChunks.zmin, superChunks.zmax = xmin, xmax, zmin, zmax
 
 			chunksTotal++
 		}
@@ -78,15 +79,28 @@ func GetEdges(key []byte, _xmin, _xmax, _zmin, _zmax int32) (x, z, xmin, xmax, z
 	x = int32(binary.LittleEndian.Uint32(key[0:4]))
 	z = int32(binary.LittleEndian.Uint32(key[4:8]))
 
-	switch {
-		case x <= _xmin:
-			xmin = x
-		case x >= _xmax:
-			xmax = x
-		case z <= _zmin:
-			zmin = z
-		case z >= _zmax:
-			zmax = z
+	if x <= _xmin {
+		xmin = x
+	} else {
+		xmin = _xmin
+	}
+
+	if x >= _xmax {
+		xmax = x
+	} else {
+		xmax = _xmax
+	}
+
+	if z <= _zmin {
+		zmin = z
+	} else {
+		zmin = _zmin
+	}
+
+	if z >= _zmax {
+		zmax = z
+	} else {
+		zmax = _zmax
 	}
 
 	return

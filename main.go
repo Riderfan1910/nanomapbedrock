@@ -20,10 +20,17 @@ func main() {
 			Usage: "Path of the Minecraft world folder.",
 			Required: true,
 		},
+		&cli.StringFlag {
+			Name: "output",
+			Aliases: []string{"o"},
+			Usage: "Path of the output folder.",
+			Value: "map.png",
+			DefaultText: "map.png",
+		},
 	}
 	
 	app.Action = func (context *cli.Context) error {
-		if err := nanomap.Main(context.String("world")); err != nil {
+		if err := nanomap.Main(context.String("world"), context.String("output")); err != nil {
 			return cli.NewExitError(err, 1)
 		}
 

@@ -10,3 +10,8 @@ func SetXZPos(x, z int32) XZPos {
 		z: z,
 	}
 }
+
+const (
+	ChunkSizeXZ = 16
+	ChunkSizeY = 256
+)
