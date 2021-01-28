@@ -9,5 +9,6 @@ require (
 	github.com/hrqsn/nbt v1.2.3
 	github.com/onsi/ginkgo v1.14.2 // indirect
 	github.com/onsi/gomega v1.10.4 // indirect
+	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli/v2 v2.3.0
 )

@@ -1,13 +1,13 @@
-package nanomap
+package nano
 
 type XZPos struct {
-	x, z int32
+	X, Z int
 }
 
-func SetXZPos(x, z int32) XZPos {
+func SetXZPos(x, z int) XZPos {
 	return XZPos{
-		x: x,
-		z: z,
+		X: x,
+		Z: z,
 	}
 }
 

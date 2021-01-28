@@ -15,7 +15,6 @@
 # vendor/
 
 .DS_Store
-map.png
 
 /db/
 /shared/
