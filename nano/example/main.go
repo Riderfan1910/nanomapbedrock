@@ -7,10 +7,13 @@ import (
 	"nanomap/nano"
 	"image"
 	"image/png"
+	"image/color"
+	"github.com/cheggaaa/pb/v3"
 )
 
 const (
-	worldPath = "/Users/hal/Desktop/Assets/Projects/nanomap/world_3"
+	worldPath = "./data/2"
+	outputPath = "./maps"
 )
 
 func main() {
@@ -28,41 +31,78 @@ func test() error {
 		return err
 	}
 
-	chunks, err := world.Chunks()
+	fmt.Println("generating maps...")
+	err = GenerateMaps(world)
 	if err != nil {
 		return err
 	}
-
-	w := int((world.Xmax() - world.Xmin()) * nano.ChunkSizeXZ)
-	h := int((world.Zmax() - world.Zmin()) * nano.ChunkSizeXZ)
-	
-	if err := GenerateMaps("./map.png", world, chunks, w, h); err != nil {
-		return err
-	}
+	fmt.Println("complete!")
 
 	return nil
 }
 
-func GenerateMaps(outputPath string, world *nano.World, chunks nano.Chunks, w, h int) error {
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
+func GenerateMap(world *nano.World, cx, cz, cminx, cminz int, img *image.RGBA) (*image.RGBA, error) {
 
-	for pos, superChunksData := range chunks {
-		for range superChunksData {
-			xmin, zmin := world.Xmin(), world.Zmin()
-			for x := 0; x < nano.ChunkSizeXZ; x++ {
-				scanZ:
-				for z := 0; z < nano.ChunkSizeXZ; z++ {
-					gx, gz := nano.GetGlobalCoords(pos.X, pos.Z, x, z)
-					for y := 0; y < nano.ChunkSizeY; y++ {
-						img.Set(gx-(xmin*nano.ChunkSizeXZ), gz-(zmin*nano.ChunkSizeXZ), nano.RGB(0x000000))
-						continue scanZ
-					}
+	chunk, err := world.LoadChunk(cminx, cminz)
+	if err != nil {
+		return nil, err
+	}
+
+	gcx, gcz := 16*cx, 16*cz
+
+	for y := 0; y < 256; y++ {
+		for z := 0; z < 16; z++ {
+			for x := 0; x < 16; x++ {
+				block, err := chunk.GetBlock(x, y, z)
+				if err != nil {
+					panic(err)
+				}
+				
+				if block.Name() == "minecraft:air" {
+					continue
+				}
+
+				bx, bz := gcx+x, gcz+z
+
+				if block.Name() != "minecraft:stone" {
+					img.Set(bx, bz, color.RGBA{125, 125, 125, 255})
+				} else {
+					img.Set(bx, bz, color.RGBA{78, 118, 42, 255})
 				}
 			}
 		}
 	}
 
-	f, err := os.Create(outputPath)
+	return img, nil
+}
+
+func GenerateMaps(world *nano.World) error {
+	img := image.NewRGBA(image.Rect(0, 0, 256, 256))
+
+	tmpl := `{{percent .}} {{ bar . "[" "=" ">" "_" "]"}} {{counters . }} {{speed . | rndcolor }}`
+	bar := pb.ProgressBarTemplate(tmpl).Start(256)
+
+	var err error
+
+	// 描画するチャンク(16x16)の最小値
+	cminx, cminz := 0, 0
+
+	for x := 0; x < 16; x++ {
+		for z := 0; z < 16; z++ {
+			img, err = GenerateMap(world, x, z, cminx+x, cminz+z, img)
+			if err != nil {
+				return err
+			}
+
+			bar.Increment()
+		}
+	}
+
+	bar.Finish()
+
+	defer world.Database.Close()
+
+	f, err := os.Create(outputPath + "/map.png")
 	if err != nil {
 		return err
 	}

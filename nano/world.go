@@ -4,13 +4,15 @@ import (
 	"path/filepath"
 	"encoding/binary"
 	"github.com/beito123/goleveldb/leveldb"
+	"github.com/beito123/goleveldb/leveldb/util"
 )
 
 type World struct {
-	Path			string
-	Database	*leveldb.DB
-	chunks 		Chunks
-	edges 		[]int
+	Path						string
+	Database				*leveldb.DB
+	chunks 					Chunks
+	subChunksTotal	int
+	edges 					[]int
 }
 
 func Load(path string) (*World, error) {
@@ -18,6 +20,7 @@ func Load(path string) (*World, error) {
 		Path: path,
 		Database: nil,
 		chunks: Chunks{},
+		subChunksTotal: 0,
 		edges: make([]int, 4),
 	}
 	var err error
@@ -31,56 +34,94 @@ func Load(path string) (*World, error) {
 	return world, nil
 }
 
+func (world *World) LoadChunk(x, z int) (*Chunk, error) {
+	chunk := NewChunk(x, z)
+
+	prefix := GetChunkKey(x, z, 47, -1)
+	iter := world.Database.NewIterator(util.BytesPrefix(prefix), nil)
+	
+	for iter.Next() {
+		key := iter.Key()
+		val := iter.Value()
+		y := (key[len(key)-1]) & 15
+
+		subChunk, err := ReadSubChunk(y, val)
+		if err != nil {
+			return nil, err
+		}
+
+		chunk.subChunks[y] = subChunk
+	}
+
+	iter.Release()
+
+	err := iter.Error()
+	if err != nil {
+		return chunk, err
+	}
+
+	return chunk, nil
+}
+
 func (world *World) LoadChunks() (Chunks, error) {
 	iter := world.Database.NewIterator(nil, nil)
-
-	chunks := make(Chunks)
 
 	subChunksTotal := 0
 	var x, z, xmin, xmax, zmin, zmax int
 	
 	for iter.Next() {
 		key := iter.Key()
-		tmp := make([]byte, len(key))
-
+		val := iter.Value()
+		
 		if len(key) > 8 && key[8] == 47 {
-			// Update the min & max coordinate of the world.
 			x, z, xmin, xmax, zmin, zmax = CalcEdges(key, xmin, xmax, zmin, zmax)
+			y := (key[len(key)-1]) & 15
 
-			subChunkData := iter.Value()
+			chunk, err := world.Chunk(x, z)
+			if err != nil {
+				return nil, err
+			}
 
-			_chunks := chunks[SetXZPos(x, z)]
-			chunk := NewChunk(subChunkData, x, z)
-			chunks[SetXZPos(x, z)] = append(_chunks, chunk)
-			// superChunks.xmin, superChunks.xmax, superChunks.zmin, superChunks.zmax = xmin, xmax, zmin, zmax
+			subChunk, err := ReadSubChunk(y, val)
+			if err != nil {
+				return nil, err
+			}
+
+			chunk.subChunks[y] = subChunk
+			world.chunks[SetXZPos(x, z)] = chunk
 
 			subChunksTotal++
 		}
-	
-		copy(tmp, key)
 	}
+
 	iter.Release()
 
 	err := iter.Error()
 	if err != nil {
-		return chunks, err
+		return world.chunks, err
 	}
 
 	edges := []int{xmin, xmax, zmin, zmax}
 
-	world.chunks = chunks
 	world.edges = edges
+	world.subChunksTotal = subChunksTotal
 
 	defer world.Database.Close()
 
-	return chunks, nil
+	return world.chunks, nil
+}
+
+func (world *World) Chunk(x, z int) (*Chunk, error) {
+	if world.chunks[SetXZPos(x, z)] != nil {
+		return world.chunks[SetXZPos(x, z)], nil
+	}
+
+	chunk := NewChunk(x, z)
+
+	return chunk, nil
 }
 
 func (world *World) Chunks() (Chunks, error) {
-	if len(world.chunks) != 0 {
-		return world.chunks, nil
-	}
-
 	chunks, err := world.LoadChunks()
 	if err != nil {
 		return nil, err
@@ -109,7 +150,11 @@ func (world *World) Zmax() int {
 	return world.edges[3]
 }
 
-// Get min & max coordinate from leveldb key.
+func (world *World) SubChunksTotal() int {
+	return world.subChunksTotal
+}
+
+// CalcEdges returns min & max coordinate from leveldb key.
 func CalcEdges(key []byte, _xmin, _xmax, _zmin, _zmax int) (x, z, xmin, xmax, zmin, zmax int) {
 	x = int(int32(binary.LittleEndian.Uint32(key[0:4])))
 	z = int(int32(binary.LittleEndian.Uint32(key[4:8])))

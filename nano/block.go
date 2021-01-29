@@ -20,3 +20,7 @@ func GetGlobalCoords(cx, cz, rbx, rbz int) (gx, gz int) {
 	gz = cz*ChunkSizeXZ + rbz
 	return
 }
+
+func (block *RawBlockState) Name() string {
+	return block.name
+}
